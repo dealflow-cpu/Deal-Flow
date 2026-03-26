@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="DealFlow MT">
+<meta name="theme-color" content="#08080a">
+<title>DealFlow Montana</title>
+<link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxODAiIGhlaWdodD0iMTgwIj48cmVjdCB3aWR0aD0iMTgwIiBoZWlnaHQ9IjE4MCIgcng9IjQwIiBmaWxsPSIjMDgwODBhIi8+PHRleHQgeD0iOTAiIHk9IjExNSIgZm9udC1zaXplPSI5MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzEwYjk4MSI+ROKAojwvdGV4dD48L3N2Zz4=">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,700;1,9..144,400&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#08080a;--s1:#0f0f12;--s2:#161619;--s3:#1c1c20;--bd:rgba(255,255,255,0.06);--bd2:rgba(255,255,255,0.1);--t:#f4f4f5;--t2:#a0a0ab;--t3:#6b6b76;--t4:#45454d;--ac:#10b981;--ac2:#059669;--acG:rgba(16,185,129,0.1);--rose:#ef4444;--rG:rgba(239,68,68,0.08);--sky:#38bdf8;--amb:#fbbf24;--vio:#a78bfa;--radius:14px}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{background:var(--bg)}
+body{font-family:'Outfit',system-ui,sans-serif;background:var(--bg);color:var(--t);overflow-x:hidden;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);min-height:100vh;min-height:100dvh}
+#root{min-height:100vh;min-height:100dvh}
+::-webkit-scrollbar{width:0;display:none}
+a{color:inherit;text-decoration:none}
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes breathe{0%,100%{box-shadow:0 0 0 0 rgba(16,185,129,0.4)}50%{box-shadow:0 0 0 8px rgba(16,185,129,0)}}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+@keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
+.shimmer{background:linear-gradient(90deg,var(--s1) 0%,var(--s2) 50%,var(--s1) 100%);background-size:800px 100%;animation:shimmer 1.5s infinite}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script type="text/babel">
+const{useState,useEffect,useCallback,useMemo,useRef}=React;
+
+/*
+═══════════════════════════════════════════════════════
+ DEALFLOW MONTANA — Production App
+ Reads from listings.json (real scraped data)
+ Every link goes to the actual broker listing
+═══════════════════════════════════════════════════════
+*/
+
+// ─── Data Layer ───
+// In production: fetch("listings.json") or fetch("https://your-api.com/listings")
+// For demo/development: falls back to empty state with instructions
+
+async function loadListings(){
+  // Try loading real scraped data from multiple locations
+  const sources=[
+    "/listings.json",           // Same server (Render deployment)
+    "./listings.json",          // Local file (development)
+    window.location.origin+"/listings.json", // Absolute URL
+  ];
+  for(const url of sources){
+    try{
+      const r=await fetch(url);
+      if(r.ok){
+        const data=await r.json();
+        if(data.listings&&data.listings.length>0){
+          return data.listings.map((l,i)=>({
+            id:l.id||`DF-${i+1}`,
+            title:l.title||"Untitled Listing",
+            description:l.description||l.raw_text||"",
+            source:l.source||"Unknown",
+            sourceUrl:l.source_url||"",
+            askingPrice:l.asking_price||0,
+            cashFlow:l.cash_flow||0,
+            grossRevenue:l.gross_revenue||0,
+            sde:l.sde||0,
+            ebitda:l.ebitda||0,
+            ffe:l.ffe||0,
+            inventory:l.inventory||0,
+            rent:l.rent||0,
+            employees:l.employees||0,
+            yearEst:l.year_established||0,
+            city:l.city||"",
+            state:l.state||"MT",
+            industry:l.detected_industry||"",
+            sba:!!l.sba_prequalified,
+            absentee:!!l.absentee,
+            realEstate:!!l.real_estate_included,
+            homeBased:!!l.home_based,
+            recurring:!!l.recurring_revenue,
+            scrapedAt:l.scraped_at||"",
+          }));
+        }
+      }
+    }catch(e){/* try next source */}
+  }
+  return null; // No data found
+}
+
+const fmt=n=>{if(!n)return"—";if(n>=1e6)return`$${(n/1e6).toFixed(1)}M`;if(n>=1e3)return`$${Math.round(n/1e3)}K`;return`$${n.toLocaleString()}`};
+const fmtF=n=>n?`$${n.toLocaleString()}`:"—";
+
+// ─── Icons (inline SVG paths) ───
+const Ic=({d,sz=16,c="currentColor",f="none"})=>React.createElement("svg",{width:sz,height:sz,viewBox:"0 0 24 24",fill:f,stroke:c,strokeWidth:1.8,strokeLinecap:"round",strokeLinejoin:"round"},React.createElement("path",{d}));
+const P={
+  search:"M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3",
+  filter:"M3 6h18M7 12h10M10 18h4",
+  heart:"M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z",
+  x:"M18 6L6 18M6 6l12 12",
+  ext:"M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3",
+  chevD:"M6 9l6 6 6-6",
+  refresh:"M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16M16 16h5v5",
+  bell:"M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0",
+  link:"M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71",
+  map:"M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0zM12 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
+  dollar:"M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6",
+  alert:"M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01",
+};
+
+// ─── Pill Component ───
+const Pill=({children,active,onClick,color})=>{
+  const bg=active?(color?color+'18':'var(--acG)'):'var(--s2)';
+  const bc=active?(color?color+'40':'rgba(16,185,129,0.25)'):'var(--bd)';
+  const tc=active?(color||'var(--ac)'):'var(--t3)';
+  return React.createElement("button",{onClick,style:{display:'inline-flex',alignItems:'center',padding:'6px 11px',borderRadius:8,fontSize:11.5,fontWeight:500,cursor:'pointer',transition:'all 0.15s',border:`1px solid ${bc}`,background:bg,color:tc,fontFamily:'inherit',lineHeight:1}},children);
+};
+
+// ─── Empty State (no data yet) ───
+const EmptyState=({onRefresh})=>React.createElement("div",{style:{minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:32,textAlign:'center'}},
+  React.createElement("div",{style:{width:80,height:80,borderRadius:24,background:'var(--s1)',border:'1px solid var(--bd)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:24}},
+    React.createElement(Ic,{d:P.alert,sz:36,c:'var(--amb)'})),
+  React.createElement("h1",{style:{fontFamily:"'Fraunces',Georgia,serif",fontSize:26,fontWeight:700,marginBottom:8}},"No Listings Loaded"),
+  React.createElement("p",{style:{color:'var(--t3)',fontSize:14,maxWidth:340,lineHeight:1.6,marginBottom:24}},"Run the scraper first to pull real Montana listings. The app reads from listings.json — place it in the same folder as this HTML file."),
+  React.createElement("div",{style:{background:'var(--s1)',border:'1px solid var(--bd)',borderRadius:12,padding:20,maxWidth:380,width:'100%',textAlign:'left',marginBottom:20}},
+    React.createElement("p",{style:{fontFamily:'monospace',fontSize:12,color:'var(--ac)',lineHeight:1.8}},
+      "$ pip install requests beautifulsoup4 lxml",React.createElement("br"),
+      "$ python scraper.py",React.createElement("br"),
+      "# → creates listings.json with real MT listings",React.createElement("br"),
+      "# → open this HTML file in the same folder"
+    )
+  ),
+  React.createElement("p",{style:{color:'var(--t4)',fontSize:12}},"Every listing will have a real link to the actual broker ad."),
+  React.createElement("button",{onClick:onRefresh,style:{marginTop:20,padding:'12px 28px',borderRadius:12,border:'none',background:'var(--ac)',color:'white',fontWeight:600,fontSize:14,fontFamily:'inherit',cursor:'pointer'}},"Retry Loading")
+);
+
+// ─── Loading Skeleton ───
+const Skeleton=()=>React.createElement("div",{style:{padding:16}},
+  Array.from({length:6}).map((_,i)=>React.createElement("div",{key:i,className:"shimmer",style:{height:140,borderRadius:'var(--radius)',marginBottom:10}}))
+);
+
+// ─── Listing Card ───
+const Card=({item,idx,onOpen,onFav,saved})=>{
+  const mult=item.cashFlow>0?(item.askingPrice/item.cashFlow).toFixed(1):null;
+  return React.createElement("a",{
+    onClick:(e)=>{e.preventDefault();onOpen(item)},
+    href:item.sourceUrl||"#",
+    style:{
+      animation:`fadeUp 0.35s ease-out ${Math.min(idx*20,200)}ms both`,
+      display:'block',background:'var(--s1)',border:'1px solid var(--bd)',borderRadius:'var(--radius)',
+      padding:'16px 16px 14px',cursor:'pointer',transition:'border-color 0.2s,transform 0.15s',
+      textDecoration:'none',color:'inherit',
+    },
+    onMouseEnter:function(e){e.currentTarget.style.borderColor='var(--bd2)';e.currentTarget.style.transform='translateY(-1px)'},
+    onMouseLeave:function(e){e.currentTarget.style.borderColor='var(--bd)';e.currentTarget.style.transform='none'},
+  },
+    // Row 1: source + fav
+    React.createElement("div",{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:8}},
+      React.createElement("div",{style:{flex:1,minWidth:0}},
+        React.createElement("div",{style:{display:'flex',alignItems:'center',gap:6,marginBottom:5}},
+          React.createElement("span",{style:{fontSize:9,fontWeight:600,letterSpacing:'0.08em',color:'var(--t4)',textTransform:'uppercase'}},item.source),
+          item.sourceUrl&&React.createElement(Ic,{d:P.link,sz:10,c:'var(--t4)'}),
+          item.city&&React.createElement("span",{style:{fontSize:9,color:'var(--t4)'}},"·"),
+          item.city&&React.createElement("span",{style:{fontSize:9,color:'var(--t3)'}},React.createElement(Ic,{d:P.map,sz:9,c:'var(--t4)'}),` ${item.city}, MT`)
+        ),
+        React.createElement("h3",{style:{fontSize:14.5,fontWeight:600,color:'var(--t)',lineHeight:1.35,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'}},item.title)
+      ),
+      React.createElement("button",{onClick:e=>{e.preventDefault();e.stopPropagation();onFav(item.id)},style:{width:36,height:36,borderRadius:10,border:`1px solid ${saved?'rgba(239,68,68,0.2)':'transparent'}`,background:saved?'var(--rG)':'transparent',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',flexShrink:0,marginLeft:8}},
+        React.createElement(Ic,{d:P.heart,sz:15,c:saved?"var(--rose)":"var(--t4)",f:saved?"var(--rose)":"none"})
+      )
+    ),
+    // Financial row
+    React.createElement("div",{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:10,marginBottom:10,padding:'10px 12px',background:'var(--s2)',borderRadius:10}},
+      [{l:"Asking",v:fmt(item.askingPrice),c:'var(--t)'},{l:"Cash Flow",v:fmt(item.cashFlow),c:'var(--ac)'},{l:"Revenue",v:fmt(item.grossRevenue),c:'var(--t2)'}].map((s,i)=>
+        React.createElement("div",{key:i},
+          React.createElement("div",{style:{fontSize:9,color:'var(--t4)',textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:2}},s.l),
+          React.createElement("div",{style:{fontSize:14,fontWeight:600,color:s.c}},s.v)
+        )
+      )
+    ),
+    // Tags
+    React.createElement("div",{style:{display:'flex',flexWrap:'wrap',gap:4,alignItems:'center'}},
+      item.industry&&React.createElement("span",{style:{fontSize:9,padding:'3px 7px',borderRadius:6,background:'rgba(56,189,248,0.08)',color:'var(--sky)',border:'1px solid rgba(56,189,248,0.12)'}},item.industry),
+      item.sba&&React.createElement("span",{style:{fontSize:9,padding:'3px 7px',borderRadius:6,background:'var(--acG)',color:'var(--ac)',border:'1px solid rgba(16,185,129,0.15)'}},"SBA"),
+      item.absentee&&React.createElement("span",{style:{fontSize:9,padding:'3px 7px',borderRadius:6,background:'rgba(251,191,36,0.08)',color:'var(--amb)',border:'1px solid rgba(251,191,36,0.12)'}},"Absentee"),
+      item.recurring&&React.createElement("span",{style:{fontSize:9,padding:'3px 7px',borderRadius:6,background:'rgba(167,139,250,0.08)',color:'var(--vio)',border:'1px solid rgba(167,139,250,0.12)'}},"Recurring"),
+      item.realEstate&&React.createElement("span",{style:{fontSize:9,padding:'3px 7px',borderRadius:6,background:'rgba(56,189,248,0.06)',color:'var(--sky)',border:'1px solid rgba(56,189,248,0.1)'}},"RE Incl."),
+      mult&&React.createElement("span",{style:{fontSize:9,padding:'3px 7px',borderRadius:6,background:'var(--s3)',color:'var(--t4)'}},mult+"x")
+    )
+  );
+};
+
+// ─── Detail Sheet ───
+const Detail=({item,onClose,onFav,saved})=>{
+  if(!item)return null;
+  const m=item.cashFlow>0?(item.askingPrice/item.cashFlow).toFixed(1):"—";
+  const sm=item.sde>0?(item.askingPrice/item.sde).toFixed(1):"—";
+  const Met=({l,v,c,s})=>React.createElement("div",null,
+    React.createElement("div",{style:{fontSize:9,color:'var(--t4)',textTransform:'uppercase',letterSpacing:'0.06em'}},l),
+    React.createElement("div",{style:{fontSize:15,fontWeight:600,color:c||'var(--t)',marginTop:3}},v),
+    s&&React.createElement("div",{style:{fontSize:10,color:'var(--t4)',marginTop:1}},s));
+  const Sec=({title,children})=>React.createElement("div",{style:{background:'var(--s1)',borderRadius:'var(--radius)',border:'1px solid var(--bd)',padding:'16px 16px 18px',marginBottom:8}},
+    React.createElement("div",{style:{fontSize:10,color:'var(--t4)',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:14,fontWeight:600}},title),children);
+
+  return React.createElement("div",{style:{animation:'fadeIn 0.15s',position:'fixed',inset:0,background:'rgba(0,0,0,0.9)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',zIndex:100,display:'flex',alignItems:'flex-end',justifyContent:'center'},onClick:onClose},
+    React.createElement("div",{style:{animation:'slideUp 0.3s ease-out',width:'100%',maxWidth:640,maxHeight:'94vh',overflow:'auto',background:'var(--bg)',borderRadius:'28px 28px 0 0',border:'1px solid var(--bd)',borderBottom:'none'},onClick:e=>e.stopPropagation()},
+      // Drag handle
+      React.createElement("div",{style:{display:'flex',justifyContent:'center',paddingTop:10,paddingBottom:6}},
+        React.createElement("div",{style:{width:40,height:4,borderRadius:2,background:'var(--s3)'}})),
+      // Header
+      React.createElement("div",{style:{padding:'4px 20px 16px'}},
+        React.createElement("div",{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}},
+          React.createElement("div",{style:{flex:1,minWidth:0}},
+            React.createElement("div",{style:{display:'flex',alignItems:'center',gap:6,marginBottom:6}},
+              React.createElement("span",{style:{fontSize:10,fontWeight:600,color:'var(--ac)',background:'var(--acG)',padding:'3px 8px',borderRadius:6}},item.source),
+              item.city&&React.createElement("span",{style:{fontSize:10,color:'var(--t3)'}},`${item.city}, Montana`)),
+            React.createElement("h2",{style:{fontFamily:"'Fraunces',Georgia,serif",fontSize:21,fontWeight:700,lineHeight:1.3,color:'var(--t)'}},item.title)),
+          React.createElement("div",{style:{display:'flex',gap:6,flexShrink:0,marginLeft:12}},
+            React.createElement("button",{onClick:()=>onFav(item.id),style:{width:38,height:38,borderRadius:12,border:`1px solid ${saved?'rgba(239,68,68,0.25)':'var(--bd)'}`,background:saved?'var(--rG)':'var(--s1)',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer'}},
+              React.createElement(Ic,{d:P.heart,sz:16,c:saved?"var(--rose)":"var(--t3)",f:saved?"var(--rose)":"none"})),
+            React.createElement("button",{onClick:onClose,style:{width:38,height:38,borderRadius:12,border:'1px solid var(--bd)',background:'var(--s1)',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',color:'var(--t3)'}},
+              React.createElement(Ic,{d:P.x,sz:16})))
+        ),
+        // Tags
+        React.createElement("div",{style:{display:'flex',flexWrap:'wrap',gap:5,marginTop:12}},
+          item.industry&&React.createElement(Pill,{active:true,color:"var(--sky)"},item.industry),
+          item.sba&&React.createElement(Pill,{active:true},"SBA Pre-Qualified"),
+          item.absentee&&React.createElement(Pill,{active:true,color:"var(--amb)"},"Absentee Owner"),
+          item.realEstate&&React.createElement(Pill,{active:true,color:"var(--sky)"},"Real Estate Incl."),
+          item.recurring&&React.createElement(Pill,{active:true,color:"var(--vio)"},"Recurring Revenue"),
+          item.homeBased&&React.createElement(Pill,{active:true},"Home-Based")
+        )
+      ),
+      React.createElement("div",{style:{padding:'0 20px 40px'}},
+        // Financials
+        React.createElement(Sec,{title:"Financials"},
+          React.createElement("div",{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:16}},
+            React.createElement(Met,{l:"Asking Price",v:fmtF(item.askingPrice)}),
+            React.createElement(Met,{l:"Cash Flow",v:fmtF(item.cashFlow),c:"var(--ac)",s:m!=="—"?m+"x multiple":""}),
+            React.createElement(Met,{l:"Revenue",v:fmtF(item.grossRevenue)}),
+            React.createElement(Met,{l:"SDE",v:fmtF(item.sde),s:sm!=="—"?sm+"x multiple":""}),
+            React.createElement(Met,{l:"EBITDA",v:fmtF(item.ebitda)}),
+            React.createElement(Met,{l:"FF&E",v:fmtF(item.ffe)}),
+            React.createElement(Met,{l:"Inventory",v:fmtF(item.inventory)}),
+            React.createElement(Met,{l:"Rent/mo",v:fmtF(item.rent)}),
+            item.employees>0&&React.createElement(Met,{l:"Employees",v:item.employees}),
+            item.yearEst>0&&React.createElement(Met,{l:"Established",v:item.yearEst,s:(2026-item.yearEst)+" years"})
+          )
+        ),
+        // Description
+        item.description&&React.createElement(Sec,{title:"Description"},
+          React.createElement("p",{style:{fontSize:13.5,color:'var(--t2)',lineHeight:1.8}},item.description)),
+        // ═══ SOURCE LINK — THE REAL AD ═══
+        item.sourceUrl&&React.createElement("a",{href:item.sourceUrl,target:"_blank",rel:"noopener noreferrer",style:{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 16px',background:'var(--s1)',borderRadius:'var(--radius)',border:'1px solid var(--bd)',marginBottom:8,textDecoration:'none',color:'var(--t)',transition:'border-color 0.2s'},onMouseEnter:function(e){e.currentTarget.style.borderColor='var(--ac)'},onMouseLeave:function(e){e.currentTarget.style.borderColor='var(--bd)'}},
+          React.createElement("div",null,
+            React.createElement("div",{style:{fontSize:10,color:'var(--t4)',textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:3}},"Original Listing"),
+            React.createElement("div",{style:{fontSize:13,fontWeight:500,color:'var(--t)'}},item.source),
+            React.createElement("div",{style:{fontSize:10,color:'var(--t4)',marginTop:2,wordBreak:'break-all'}},item.sourceUrl.substring(0,60)+"...")
+          ),
+          React.createElement("div",{style:{display:'flex',alignItems:'center',gap:6,color:'var(--ac)',fontSize:12,fontWeight:600,whiteSpace:'nowrap',marginLeft:12}},
+            "View Ad ",React.createElement(Ic,{d:P.ext,sz:13,c:"var(--ac)"}))
+        ),
+        // Action buttons
+        React.createElement("div",{style:{display:'flex',gap:8,marginTop:4}},
+          item.sourceUrl&&React.createElement("a",{href:item.sourceUrl,target:"_blank",rel:"noopener noreferrer",style:{flex:1,padding:'15px 0',borderRadius:12,border:'none',background:'var(--ac)',color:'white',fontWeight:600,fontSize:14.5,fontFamily:'inherit',textAlign:'center',display:'block',textDecoration:'none'}},"Open Original Ad ↗"),
+          React.createElement("button",{onClick:()=>onFav(item.id),style:{padding:'15px 20px',borderRadius:12,border:'1px solid var(--bd)',background:'var(--s1)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}},
+            React.createElement(Ic,{d:P.heart,sz:18,c:saved?"var(--rose)":"var(--t3)",f:saved?"var(--rose)":"none"}))
+        ),
+        item.scrapedAt&&React.createElement("p",{style:{textAlign:'center',fontSize:10,color:'var(--t4)',marginTop:14}},`Scraped ${new Date(item.scrapedAt).toLocaleDateString()}`)
+      )
+    )
+  );
+};
+
+// ═══════════════════════════════════════
+// MAIN APP
+// ═══════════════════════════════════════
+function App(){
+  const[listings,setListings]=useState(null); // null=loading, []=empty, [...]= data
+  const[loading,setLoading]=useState(true);
+  const[saved,setSaved]=useState(()=>{try{return new Set(JSON.parse(localStorage.getItem('df_saved')||'[]'))}catch(e){return new Set()}});
+  const[detail,setDetail]=useState(null);
+  const[tab,setTab]=useState("search");
+  const[toast,setToast]=useState(null);
+  const[showF,setSF]=useState(false);
+  const[search,setSearch]=useState("");
+  const[sort,setSort]=useState("price_desc");
+  const[page,setPage]=useState(1);
+  const[showSort,setSS]=useState(false);
+  const pp=30;
+
+  const[filters,setF]=useState({industries:[],cities:[],sba:false,absentee:false,realEstate:false,recurring:false,priceMin:0,priceMax:99999999,cfMin:0});
+
+  const flash=useCallback(msg=>{setToast(msg);setTimeout(()=>setToast(null),2200)},[]);
+
+  // Load real data
+  const doLoad=useCallback(async()=>{
+    setLoading(true);
+    const data=await loadListings();
+    setListings(data);
+    setLoading(false);
+  },[]);
+
+  useEffect(()=>{doLoad()},[doLoad]);
+
+  // Persist saved
+  useEffect(()=>{try{localStorage.setItem('df_saved',JSON.stringify([...saved]))}catch(e){}},[saved]);
+
+  const toggleFav=useCallback(id=>{setSaved(prev=>{const n=new Set(prev);if(n.has(id)){n.delete(id);flash("Removed")}else{n.add(id);flash("Saved ♥")}return n})},[flash]);
+
+  // Extract available cities and industries from real data
+  const availableCities=useMemo(()=>{if(!listings)return[];const c={};listings.forEach(l=>{if(l.city)c[l.city]=(c[l.city]||0)+1});return Object.entries(c).sort((a,b)=>b[1]-a[1]).map(x=>x[0])},[listings]);
+  const availableIndustries=useMemo(()=>{if(!listings)return[];const c={};listings.forEach(l=>{if(l.industry)c[l.industry]=(c[l.industry]||0)+1});return Object.entries(c).sort((a,b)=>b[1]-a[1]).map(x=>x[0])},[listings]);
+
+  // Filter + sort
+  const filtered=useMemo(()=>{
+    if(!listings)return[];
+    const pool=tab==="saved"?listings.filter(l=>saved.has(l.id)):listings;
+    let r=pool.filter(l=>{const f=filters;
+      if(f.industries.length&&!f.industries.includes(l.industry))return false;
+      if(f.cities.length&&!f.cities.includes(l.city))return false;
+      if(l.askingPrice&&(l.askingPrice<f.priceMin||l.askingPrice>f.priceMax))return false;
+      if(f.cfMin&&l.cashFlow<f.cfMin)return false;
+      if(f.sba&&!l.sba)return false;
+      if(f.absentee&&!l.absentee)return false;
+      if(f.realEstate&&!l.realEstate)return false;
+      if(f.recurring&&!l.recurring)return false;
+      if(search){const q=search.toLowerCase();if(!`${l.title} ${l.description} ${l.industry} ${l.city} ${l.source} Montana`.toLowerCase().includes(q))return false}
+      return true});
+    r.sort((a,b)=>{
+      if(sort==="price_asc")return(a.askingPrice||0)-(b.askingPrice||0);
+      if(sort==="price_desc")return(b.askingPrice||0)-(a.askingPrice||0);
+      if(sort==="cf_desc")return(b.cashFlow||0)-(a.cashFlow||0);
+      if(sort==="rev_desc")return(b.grossRevenue||0)-(a.grossRevenue||0);
+      return 0});
+    return r},[listings,filters,sort,search,tab,saved]);
+
+  const tp=Math.ceil(filtered.length/pp),paged=filtered.slice((page-1)*pp,page*pp);
+  const aC=[filters.industries.length,filters.cities.length,filters.sba,filters.absentee,filters.realEstate,filters.recurring,filters.priceMin>0,filters.cfMin>0].filter(Boolean).length;
+  const resetF=()=>setF({industries:[],cities:[],sba:false,absentee:false,realEstate:false,recurring:false,priceMin:0,priceMax:99999999,cfMin:0});
+  const inp={width:'100%',background:'var(--s2)',border:'1px solid var(--bd)',borderRadius:10,padding:'9px 12px',color:'var(--t)',fontSize:13,fontFamily:'inherit',outline:'none'};
+
+  // ─── Loading ───
+  if(loading)return React.createElement("div",{style:{minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:32}},
+    React.createElement("div",{style:{position:'relative',marginBottom:28}},
+      React.createElement("div",{style:{width:64,height:64,borderRadius:18,background:'var(--acG)',border:'1px solid rgba(16,185,129,0.2)',display:'flex',alignItems:'center',justifyContent:'center'}},
+        React.createElement("span",{style:{fontFamily:"'Fraunces',serif",fontSize:28,fontWeight:700,color:'var(--ac)'}},"D")),
+      React.createElement("div",{style:{position:'absolute',inset:-4,borderRadius:22,border:'2px solid rgba(16,185,129,0.15)',animation:'breathe 2s ease-in-out infinite'}})),
+    React.createElement("h1",{style:{fontFamily:"'Fraunces',Georgia,serif",fontSize:28,fontWeight:700,marginBottom:6}},"DealFlow"),
+    React.createElement("p",{style:{color:'var(--t4)',fontSize:12,letterSpacing:'0.1em'}},"LOADING MONTANA LISTINGS...")
+  );
+
+  // ─── No Data ───
+  if(!listings)return React.createElement(EmptyState,{onRefresh:doLoad});
+
+  // ─── Main App ───
+  return React.createElement("div",{style:{minHeight:'100vh',background:'var(--bg)',paddingBottom:40}},
+    // Toast
+    toast&&React.createElement("div",{style:{animation:'fadeIn 0.12s',position:'fixed',top:Math.max(16,parseInt(getComputedStyle(document.documentElement).getPropertyValue('env(safe-area-inset-top)'))||16),left:'50%',transform:'translateX(-50%)',zIndex:200,background:'var(--ac)',color:'white',padding:'10px 24px',borderRadius:14,fontSize:13,fontWeight:500,boxShadow:'0 8px 32px rgba(16,185,129,0.25)'}},toast),
+
+    // ═══ Header ═══
+    React.createElement("header",{style:{position:'sticky',top:0,zIndex:50,background:'rgba(8,8,10,0.94)',backdropFilter:'blur(24px)',WebkitBackdropFilter:'blur(24px)',borderBottom:'1px solid var(--bd)'}},
+      React.createElement("div",{style:{maxWidth:1200,margin:'0 auto',padding:'14px 16px 12px'}},
+        // Top row
+        React.createElement("div",{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}},
+          React.createElement("div",{style:{display:'flex',alignItems:'center',gap:10}},
+            React.createElement("div",{style:{width:36,height:36,borderRadius:11,background:'var(--acG)',border:'1px solid rgba(16,185,129,0.2)',display:'flex',alignItems:'center',justifyContent:'center'}},
+              React.createElement("span",{style:{fontFamily:"'Fraunces',serif",fontSize:18,fontWeight:700,color:'var(--ac)'}},"D")),
+            React.createElement("div",null,
+              React.createElement("h1",{style:{fontFamily:"'Fraunces',Georgia,serif",fontSize:20,fontWeight:700,lineHeight:1}},"DealFlow"),
+              React.createElement("p",{style:{fontSize:9,color:'var(--t4)',letterSpacing:'0.14em',marginTop:1}},"MONTANA · "+listings.length+" REAL LISTINGS"))
+          ),
+          React.createElement("button",{onClick:doLoad,style:{display:'flex',alignItems:'center',gap:5,padding:'8px 12px',borderRadius:10,border:'1px solid var(--bd)',background:'var(--s1)',cursor:'pointer',color:'var(--t3)',fontSize:11,fontFamily:'inherit'}},
+            React.createElement(Ic,{d:P.refresh,sz:13})," Reload")
+        ),
+        // Tabs
+        React.createElement("div",{style:{display:'flex',marginBottom:12,background:'var(--s1)',borderRadius:12,padding:3,border:'1px solid var(--bd)'}},
+          [{k:"search",l:"All Listings",c:listings.length},{k:"saved",l:"Saved",c:saved.size}].map(t=>
+            React.createElement("button",{key:t.k,onClick:()=>{setTab(t.k);setPage(1)},style:{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6,padding:'10px 0',borderRadius:10,border:'none',cursor:'pointer',fontFamily:'inherit',background:tab===t.k?'var(--s2)':'transparent',color:tab===t.k?'var(--t)':'var(--t4)',fontWeight:tab===t.k?600:400,fontSize:12.5}},
+              t.k==="saved"&&React.createElement(Ic,{d:P.heart,sz:13}),
+              t.l,
+              React.createElement("span",{style:{fontSize:10,padding:'2px 7px',borderRadius:6,background:tab===t.k?'var(--acG)':'var(--s2)',color:tab===t.k?'var(--ac)':'var(--t4)',fontWeight:600}},t.c)
+            ))
+        ),
+        // Search
+        React.createElement("div",{style:{display:'flex',gap:8}},
+          React.createElement("div",{style:{flex:1,position:'relative'}},
+            React.createElement("div",{style:{position:'absolute',left:12,top:'50%',transform:'translateY(-50%)',color:'var(--t4)'}},React.createElement(Ic,{d:P.search,sz:15})),
+            React.createElement("input",{value:search,onChange:e=>{setSearch(e.target.value);setPage(1)},placeholder:"Search listings, cities, industries...",style:{width:'100%',background:'var(--s1)',border:'1px solid var(--bd)',borderRadius:12,padding:'11px 14px 11px 38px',color:'var(--t)',fontSize:13.5,fontFamily:'inherit',outline:'none'}})
+          ),
+          React.createElement("button",{onClick:()=>setSF(!showF),style:{display:'flex',alignItems:'center',gap:5,padding:'0 14px',borderRadius:12,border:`1px solid ${showF?'rgba(16,185,129,0.25)':'var(--bd)'}`,background:showF?'var(--acG)':'var(--s1)',cursor:'pointer',color:showF?'var(--ac)':'var(--t3)',fontSize:12,fontFamily:'inherit',fontWeight:500}},
+            React.createElement(Ic,{d:P.filter,sz:14}),aC>0?` ${aC}`:"")
+        )
+      ),
+      // Filters
+      showF&&React.createElement("div",{style:{animation:'fadeIn 0.12s',maxWidth:1200,margin:'0 auto',padding:'0 16px 16px',borderTop:'1px solid var(--bd)'}},
+        React.createElement("div",{style:{paddingTop:14}},
+          React.createElement("div",{style:{marginBottom:14}},
+            React.createElement("div",{style:{fontSize:9,color:'var(--t4)',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:7,fontWeight:600}},"Quick Filters"),
+            React.createElement("div",{style:{display:'flex',flexWrap:'wrap',gap:5}},
+              [{k:"sba",l:"SBA Qualified"},{k:"absentee",l:"Absentee"},{k:"realEstate",l:"Real Estate"},{k:"recurring",l:"Recurring"}].map(({k,l})=>React.createElement(Pill,{key:k,active:filters[k],onClick:()=>{setF(f=>({...f,[k]:!f[k]}));setPage(1)}},l))
+            )),
+          availableCities.length>0&&React.createElement("div",{style:{marginBottom:14}},
+            React.createElement("div",{style:{fontSize:9,color:'var(--t4)',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:7,fontWeight:600}},"City"),
+            React.createElement("div",{style:{display:'flex',flexWrap:'wrap',gap:4}},
+              availableCities.slice(0,20).map(c=>React.createElement(Pill,{key:c,active:filters.cities.includes(c),onClick:()=>{setF(f=>({...f,cities:f.cities.includes(c)?f.cities.filter(x=>x!==c):[...f.cities,c]}));setPage(1)}},c))
+            )),
+          availableIndustries.length>0&&React.createElement("div",{style:{marginBottom:14}},
+            React.createElement("div",{style:{fontSize:9,color:'var(--t4)',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:7,fontWeight:600}},"Industry"),
+            React.createElement("div",{style:{display:'flex',flexWrap:'wrap',gap:4}},
+              availableIndustries.slice(0,15).map(ind=>React.createElement(Pill,{key:ind,active:filters.industries.includes(ind),onClick:()=>{setF(f=>({...f,industries:f.industries.includes(ind)?f.industries.filter(x=>x!==ind):[...f.industries,ind]}));setPage(1)}},ind))
+            )),
+          React.createElement("div",{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:10,marginBottom:14}},
+            React.createElement("div",null,React.createElement("label",{style:{fontSize:10,color:'var(--t4)',display:'block',marginBottom:5}},"Min Price"),React.createElement("input",{type:"number",value:filters.priceMin||"",onChange:e=>{setF(f=>({...f,priceMin:+e.target.value||0}));setPage(1)},style:inp})),
+            React.createElement("div",null,React.createElement("label",{style:{fontSize:10,color:'var(--t4)',display:'block',marginBottom:5}},"Max Price"),React.createElement("input",{type:"number",value:filters.priceMax<99999999?filters.priceMax:"",onChange:e=>{setF(f=>({...f,priceMax:+e.target.value||99999999}));setPage(1)},style:inp})),
+            React.createElement("div",null,React.createElement("label",{style:{fontSize:10,color:'var(--t4)',display:'block',marginBottom:5}},"Min Cash Flow"),React.createElement("input",{type:"number",value:filters.cfMin||"",onChange:e=>{setF(f=>({...f,cfMin:+e.target.value||0}));setPage(1)},style:inp}))
+          ),
+          React.createElement("div",{style:{display:'flex',justifyContent:'space-between',alignItems:'center',paddingTop:12,borderTop:'1px solid var(--bd)'}},
+            React.createElement("button",{onClick:()=>{resetF();setSearch("");setPage(1)},style:{background:'none',border:'none',cursor:'pointer',color:'var(--t4)',fontSize:12,fontFamily:'inherit'}},"Clear all"),
+            React.createElement("span",{style:{fontSize:11,color:'var(--t4)'}},filtered.length+" results"))
+        ))
+    ),
+    // Sort bar
+    React.createElement("div",{style:{maxWidth:1200,margin:'0 auto',padding:'12px 16px 8px',display:'flex',justifyContent:'space-between',alignItems:'center'}},
+      React.createElement("p",{style:{fontSize:13,color:'var(--t3)'}},React.createElement("span",{style:{color:'var(--t)',fontWeight:600}},filtered.length),tab==="saved"?" saved":" listings"),
+      React.createElement("div",{style:{position:'relative'}},
+        React.createElement("button",{onClick:()=>setSS(!showSort),style:{display:'flex',alignItems:'center',gap:5,padding:'7px 12px',borderRadius:8,border:'1px solid var(--bd)',background:'var(--s1)',cursor:'pointer',color:'var(--t3)',fontSize:11,fontFamily:'inherit'}},"Sort",React.createElement(Ic,{d:P.chevD,sz:12})),
+        showSort&&React.createElement("div",{style:{animation:'fadeIn 0.08s',position:'absolute',top:'100%',right:0,marginTop:4,background:'var(--s1)',border:'1px solid var(--bd)',borderRadius:14,overflow:'hidden',zIndex:30,minWidth:170,boxShadow:'0 16px 48px rgba(0,0,0,0.6)'}},
+          [{k:"price_desc",l:"Price: High → Low"},{k:"price_asc",l:"Price: Low → High"},{k:"cf_desc",l:"Cash Flow: Highest"},{k:"rev_desc",l:"Revenue: Highest"}].map(s=>React.createElement("button",{key:s.k,onClick:()=>{setSort(s.k);setSS(false)},style:{display:'block',width:'100%',padding:'11px 16px',border:'none',cursor:'pointer',background:sort===s.k?'var(--acG)':'transparent',color:sort===s.k?'var(--ac)':'var(--t2)',fontSize:12.5,fontFamily:'inherit',textAlign:'left'}},s.l))
+        ))
+    ),
+    // Empty saved
+    tab==="saved"&&saved.size===0&&React.createElement("div",{style:{textAlign:'center',padding:'64px 24px'}},
+      React.createElement(Ic,{d:P.heart,sz:48,c:'var(--s3)'}),
+      React.createElement("h3",{style:{fontFamily:"'Fraunces',serif",fontSize:22,color:'var(--t2)',marginTop:16,marginBottom:6}},"No saved deals yet"),
+      React.createElement("p",{style:{fontSize:13,color:'var(--t4)',maxWidth:280,margin:'0 auto'}},"Tap the heart on any listing to save it here"),
+      React.createElement("button",{onClick:()=>setTab("search"),style:{marginTop:20,padding:'11px 28px',borderRadius:10,border:'1px solid var(--bd)',background:'var(--s1)',cursor:'pointer',color:'var(--t3)',fontSize:13,fontFamily:'inherit'}},"Browse Listings")),
+    // Grid
+    paged.length>0&&React.createElement("div",{style:{maxWidth:1200,margin:'0 auto',padding:'0 16px'}},
+      React.createElement("div",{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(340px,1fr))',gap:10}},
+        paged.map((item,idx)=>React.createElement(Card,{key:item.id,item,idx,onOpen:setDetail,onFav:toggleFav,saved:saved.has(item.id)}))),
+      tp>1&&React.createElement("div",{style:{display:'flex',justifyContent:'center',alignItems:'center',gap:6,marginTop:28}},
+        React.createElement("button",{disabled:page===1,onClick:()=>setPage(p=>p-1),style:{padding:'9px 16px',borderRadius:10,border:'1px solid var(--bd)',background:'var(--s1)',cursor:page===1?'default':'pointer',color:'var(--t3)',fontSize:12,fontFamily:'inherit',opacity:page===1?0.3:1}},"← Prev"),
+        React.createElement("span",{style:{fontSize:12,color:'var(--t4)',padding:'0 8px'}},`${page} / ${tp}`),
+        React.createElement("button",{disabled:page===tp,onClick:()=>setPage(p=>p+1),style:{padding:'9px 16px',borderRadius:10,border:'1px solid var(--bd)',background:'var(--s1)',cursor:page===tp?'default':'pointer',color:'var(--t3)',fontSize:12,fontFamily:'inherit',opacity:page===tp?0.3:1}},"Next →"))
+    ),
+    // No results
+    tab==="search"&&paged.length===0&&listings.length>0&&React.createElement("div",{style:{textAlign:'center',padding:'64px 24px'}},
+      React.createElement("p",{style:{color:'var(--t3)',fontSize:14}},"No listings match your filters"),
+      React.createElement("button",{onClick:()=>{resetF();setSearch("")},style:{marginTop:12,padding:'10px 24px',borderRadius:10,border:'none',background:'var(--ac)',cursor:'pointer',color:'white',fontSize:13,fontFamily:'inherit',fontWeight:500}},"Clear Filters")),
+    // Detail
+    React.createElement(Detail,{item:detail,onClose:()=>setDetail(null),onFav:toggleFav,saved:detail?saved.has(detail.id):false})
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+</script>
+</body>
+</html>
