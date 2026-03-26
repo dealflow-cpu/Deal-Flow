@@ -1,52 +1,111 @@
-"""
+“””
 DealFlow Server
-Serves the frontend app AND the scraped listings.json.
-This is what runs on Render as a web service.
-"""
+Serves the app AND runs the scraper on the same machine.
+Scrapes on startup + every 4 hours automatically.
+“””
 from flask import Flask, send_from_directory, jsonify
 import os
 import json
 import subprocess
 import threading
+import time
+from datetime import datetime
 
-app = Flask(__name__, static_folder="public")
+app = Flask(**name**)
 
-DATA_DIR = os.path.dirname(os.path.abspath(__file__))
-LISTINGS_FILE = os.path.join(DATA_DIR, "listings.json")
+DATA_DIR = os.path.dirname(os.path.abspath(**file**))
+PUBLIC_DIR = os.path.join(DATA_DIR, “public”)
+LISTINGS_FILE = os.path.join(DATA_DIR, “listings.json”)
 
-@app.route("/")
+# ─── Scraper Runner ───
+
+scraper_status = {“running”: False, “last_run”: None, “last_result”: None}
+
+def run_scraper():
+“”“Run scraper.py and update status.”””
+if scraper_status[“running”]:
+return
+scraper_status[“running”] = True
+scraper_status[“last_run”] = datetime.utcnow().isoformat()
+print(f”[{datetime.utcnow()}] Starting scraper…”)
+try:
+result = subprocess.run(
+[“python”, “scraper.py”],
+cwd=DATA_DIR,
+capture_output=True,
+text=True,
+timeout=1800  # 30 min max
+)
+scraper_status[“last_result”] = “success” if result.returncode == 0 else “error”
+if result.returncode != 0:
+print(f”Scraper error: {result.stderr[:500]}”)
+else:
+print(f”Scraper finished successfully”)
+except Exception as e:
+scraper_status[“last_result”] = f”error: {e}”
+print(f”Scraper exception: {e}”)
+finally:
+scraper_status[“running”] = False
+
+def scraper_loop():
+“”“Run scraper on startup, then every 4 hours.”””
+# Run immediately on startup
+run_scraper()
+# Then every 4 hours
+while True:
+time.sleep(4 * 60 * 60)  # 4 hours
+run_scraper()
+
+# Start scraper in background thread on server boot
+
+scraper_thread = threading.Thread(target=scraper_loop, daemon=True)
+scraper_thread.start()
+
+# ─── Routes ───
+
+@app.route(”/”)
 def index():
-    return send_from_directory("public", "index.html")
+# Try public dir first, then root
+if os.path.exists(os.path.join(PUBLIC_DIR, “index.html”)):
+return send_from_directory(PUBLIC_DIR, “index.html”)
+if os.path.exists(os.path.join(DATA_DIR, “index.html”)):
+return send_from_directory(DATA_DIR, “index.html”)
+return “DealFlow server running. No index.html found.”, 200
 
-@app.route("/listings.json")
+@app.route(”/listings.json”)
 def listings():
-    if os.path.exists(LISTINGS_FILE):
-        with open(LISTINGS_FILE) as f:
-            data = json.load(f)
-        return jsonify(data)
-    return jsonify({"listings": [], "total_listings": 0, "error": "No data yet. Scraper hasn't run."})
+if os.path.exists(LISTINGS_FILE):
+with open(LISTINGS_FILE) as f:
+data = json.load(f)
+resp = jsonify(data)
+resp.headers[“Access-Control-Allow-Origin”] = “*”
+return resp
+return jsonify({“listings”: [], “total_listings”: 0, “message”: “Scraper is running, check back in a few minutes…”})
 
-@app.route("/status")
+@app.route(”/status”)
 def status():
-    exists = os.path.exists(LISTINGS_FILE)
-    info = {"scraper_has_run": exists}
-    if exists:
-        with open(LISTINGS_FILE) as f:
-            data = json.load(f)
-        info["total_listings"] = data.get("total_listings", 0)
-        info["scraped_at"] = data.get("scraped_at", "unknown")
-        info["sources"] = data.get("sources", {})
-    return jsonify(info)
+info = {
+“server”: “running”,
+“scraper”: scraper_status,
+“listings_exist”: os.path.exists(LISTINGS_FILE),
+}
+if os.path.exists(LISTINGS_FILE):
+with open(LISTINGS_FILE) as f:
+data = json.load(f)
+info[“total_listings”] = data.get(“total_listings”, 0)
+info[“scraped_at”] = data.get(“scraped_at”, “unknown”)
+info[“sources”] = data.get(“sources”, {})
+return jsonify(info)
 
-@app.route("/scrape", methods=["POST"])
+@app.route(”/scrape”, methods=[“POST”, “GET”])
 def trigger_scrape():
-    """Manually trigger a scrape (optional)."""
-    def run():
-        subprocess.run(["python", "scraper.py"], cwd=DATA_DIR)
-    t = threading.Thread(target=run)
-    t.start()
-    return jsonify({"status": "Scraper started in background"})
+“”“Manually trigger a scrape.”””
+if scraper_status[“running”]:
+return jsonify({“status”: “Scraper already running”})
+t = threading.Thread(target=run_scraper)
+t.start()
+return jsonify({“status”: “Scraper started”})
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+if **name** == “**main**”:
+port = int(os.environ.get(“PORT”, 5000))
+app.run(host=“0.0.0.0”, port=port)
